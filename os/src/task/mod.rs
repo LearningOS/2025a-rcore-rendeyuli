@@ -19,8 +19,8 @@ use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
-
+pub use task::{TaskControlBlock, TaskStatus,};
+use task::MAX_SYS_CALL_NUM;
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -45,6 +45,8 @@ pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    //这里理解错了，应该是每个任务的各种系统调用计数
+    //task_syscall_counts: [usize; 10000],
 }
 
 lazy_static! {
@@ -54,6 +56,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_counts: [0; MAX_SYS_CALL_NUM],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -65,6 +68,9 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    //TODO
+                    //task_syscall_counts: [0; 10000],
+
                 })
             },
         }
@@ -135,6 +141,19 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    //实现任务的系统调用次数的增加
+    fn inc_syscall_count(&self, id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counts[id] += 1;
+
+    }
+    //实现查询
+    fn get_syscall_count(&self, id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counts[id]
+    }
 }
 
 /// Run the first task in task list.
@@ -168,4 +187,14 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// 增加当前任务id的系统调用计数
+pub fn inc_syscall_count(id: usize) {
+    TASK_MANAGER.inc_syscall_count(id);
+}
+
+/// 返回指定id任务的系统调用计数
+pub fn get_syscall_count(id: usize) -> usize {
+    TASK_MANAGER.get_syscall_count(id)
 }

@@ -9,7 +9,7 @@
     .globl __alltraps
     .globl __restore
     .align 2
-__alltraps:
+__alltraps:  #上下文保存
     csrrw sp, sscratch, sp
     # now sp->kernel stack, sscratch->user stack
     # allocate a TrapContext on kernel stack
@@ -37,7 +37,7 @@ __alltraps:
     mv a0, sp
     call trap_handler
 
-__restore:
+__restore:  #上下文恢复
     # now sp->kernel stack(after allocated), sscratch->user stack
     # restore sstatus/sepc
     ld t0, 32*8(sp)

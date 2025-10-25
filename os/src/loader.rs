@@ -95,6 +95,7 @@ pub fn load_apps() {
 }
 
 /// get app info with entry and sp and save `TrapContext` in kernel stack
+//初始化任务控制块，在内核栈压入初始化的TrapContext，返回内核栈中TrapContext的地址
 pub fn init_app_cx(app_id: usize) -> usize {
     KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
         get_base_i(app_id),
