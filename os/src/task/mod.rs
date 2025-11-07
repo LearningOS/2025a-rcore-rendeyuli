@@ -202,3 +202,18 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
 }
+
+/// 获取当前任务的id
+pub fn get_current_task_id() -> usize {
+    TASK_MANAGER.inner.exclusive_access().current_task
+}
+
+/// 获取某个任务被调用次数
+pub fn get_syscall_count(task_id: usize, syscall_id: usize) -> usize {
+    TASK_MANAGER.inner.exclusive_access().tasks[task_id].syscall_count[syscall_id]
+}
+
+/// 增加某个任务被调用次数
+pub fn increase_syscall_count(task_id: usize, syscall_id: usize) {
+    TASK_MANAGER.inner.exclusive_access().tasks[task_id].syscall_count[syscall_id] += 1;
+}
