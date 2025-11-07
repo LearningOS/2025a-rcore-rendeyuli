@@ -3,7 +3,7 @@
 
 use crate::{
     mm::{PageTable, VirtAddr}, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_count, suspend_current_and_run_next, get_current_task_id,
+        change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_count, suspend_current_and_run_next,
     }
 };
 #[repr(C)]
@@ -32,7 +32,8 @@ pub fn sys_yield() -> isize {
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    -1
+    
+    //-1
 }
 
 /// TODO: Finish sys_trace to pass testcases
@@ -89,9 +90,7 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
 
         },
         2 => {
-            let syscall_id = id;
-            let task_id = get_current_task_id();
-            get_syscall_count(task_id, syscall_id) as isize
+            get_syscall_count(id) as isize
         },
         _ => {
             -1
