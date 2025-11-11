@@ -70,6 +70,11 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    /// 添加一个检测是否允许用户态的程序访问
+    pub fn useraccessible(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
+
 }
 
 /// page table structure
@@ -117,7 +122,7 @@ impl PageTable {
     }
     /// Find PageTableEntry by VirtPageNum
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs = vpn.indexes(); //将页表项的三级页表地址分别存在idx中
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {

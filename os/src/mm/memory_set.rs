@@ -51,6 +51,12 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+
+    /// 取消MemorySet的page_table映射
+    pub fn unmap_page_table(&mut self,vpn:VirtPageNum){
+        self.page_table.unmap(vpn);
+    }
+
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,

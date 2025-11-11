@@ -110,6 +110,7 @@ impl VirtAddr {
     }
 
     /// Check if the virtual address is aligned by page size
+    //判断当前地址是否是页对齐的地址，即当前地址是否是某个页的起始地址
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }

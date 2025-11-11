@@ -15,13 +15,13 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, MemorySet, VirtAddr, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
-
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -218,4 +218,46 @@ pub fn get_syscall_count(syscall_id: usize) -> usize {
 pub fn increase_syscall_count(syscall_id: usize) {
     let task_id = get_current_task_id();
     TASK_MANAGER.inner.exclusive_access().tasks[task_id].syscall_count[syscall_id] += 1;
+}
+
+/// 为当前任务映射一段虚拟内存
+pub fn map_for_current_task(start_vpn: VirtPageNum, num_pages: usize, map_perm: MapPermission) -> isize {
+    let task_id = get_current_task_id();
+    let memory_set = &mut TASK_MANAGER.inner.exclusive_access().tasks[task_id].memory_set;
+    let mut end_vpn = start_vpn;
+    for _ in 0..num_pages {
+        match memory_set.translate(end_vpn){
+            Some(pte) => {
+                if pte.is_valid() {
+                    return -1;
+                }
+            }
+            _ => {}
+        }
+        end_vpn.0 += 1;
+    }
+    let start_va:VirtAddr = VirtAddr::from(start_vpn);
+    let end_va:VirtAddr = VirtAddr::from(end_vpn);
+    memory_set.insert_framed_area(start_va, end_va, map_perm);
+    return 0;
+}
+
+/// 为当前任务取消映射一段虚拟内存
+pub fn unmap_for_current_task(start_vpn: VirtPageNum, num_pages: usize) -> isize {
+    let task_id = get_current_task_id();
+    let memory_set:&mut MemorySet = &mut TASK_MANAGER.inner.exclusive_access().tasks[task_id].memory_set;
+    let mut end_vpn=start_vpn;
+    for _ in 0..num_pages {
+        if let Some(pte) = memory_set.translate(end_vpn){
+            if !pte.is_valid() {
+                return -1;
+            }
+            //memory_set.page_table.unmap(end_vpn);
+            memory_set.unmap_page_table(end_vpn);
+            end_vpn.0 += 1;
+        }else{
+            return -1;
+        }
+    }
+    return 0;
 }
