@@ -82,7 +82,7 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
             let vpn = va.floor();
             match page_table.translate(vpn){
                 Some(pte) => {
-                    if !pte.is_valid() || !pte.readable() || !pte.useraccessible() {
+                    if !pte.is_valid() || !pte.readable() || !pte.useraccessible() { //注意这里我加了一个useraccessable()函数，这个是因为ch4的测试trace里有个超范围测试，报错为None == Some(0)，地址是全1，那么就需要判断用户态是否可以访问，即UserMode是否为0，为0则说明用户态不可访问，ecall到内核态的情况好像是1不能访问
                         -1
                     } else {
                         // 读取地址处一个字节的值并返回
