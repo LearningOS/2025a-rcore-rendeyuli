@@ -3,11 +3,12 @@ use alloc::sync::Arc;
 
 use crate::{
     loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
+    mm::{translated_byte_buffer, translated_refmut, translated_str},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next,
+        suspend_current_and_run_next,map_for_current_task,
     },
+    timer::get_time_us
 };
 
 #[repr(C)]
@@ -36,6 +37,9 @@ pub fn sys_getpid() -> isize {
     current_task().unwrap().pid.0 as isize
 }
 
+/// 功能：由当前进程 fork 出一个子进程。
+/// 返回值：对于子进程返回 0，对于当前进程则返回子进程的 PID 。
+/// syscall ID：220
 pub fn sys_fork() -> isize {
     trace!("kernel:pid[{}] sys_fork", current_task().unwrap().pid.0);
     let current_task = current_task().unwrap();
@@ -51,6 +55,11 @@ pub fn sys_fork() -> isize {
     new_pid as isize
 }
 
+/// 功能：将当前进程的地址空间清空并加载一个特定的可执行文件，返回用户态后开始它的执行。
+/// 参数：字符串 path 给出了要加载的可执行文件的名字；
+/// 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则不应该返回。
+/// 注意：path 必须以 "\0" 结尾，否则内核将无法确定其长度
+/// syscall ID：221
 pub fn sys_exec(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_exec", current_task().unwrap().pid.0);
     let token = current_user_token();
@@ -66,6 +75,12 @@ pub fn sys_exec(path: *const u8) -> isize {
 
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
+/// 功能：当前进程等待一个子进程变为僵尸进程，回收其全部资源并收集其返回值。
+/// 参数：pid 表示要等待的子进程的进程 ID，如果为 -1 的话表示等待任意一个子进程；
+/// exit_code 表示保存子进程返回值的地址，如果这个地址为 0 的话表示不必保存。
+/// 返回值：如果要等待的子进程不存在则返回 -1；否则如果要等待的子进程均未结束则返回 -2；
+/// 否则返回结束的子进程的进程 ID。
+/// syscall ID：260
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     trace!("kernel::pid[{}] sys_waitpid [{}]", current_task().unwrap().pid.0, pid);
     let task = current_task().unwrap();
@@ -110,7 +125,25 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    //获取时间
+    let us = get_time_us();
+    let ts = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+    let len = core::mem::size_of::<TimeVal>();
+    let ts_byte_arr: &[u8] = unsafe {
+        core::slice::from_raw_parts(&ts as *const TimeVal as *const u8, len)
+    };
+    //将用户地址空间转为内核可访问的缓存区,存入时间值
+    let token = current_user_token();
+    let buffers = translated_byte_buffer(token, _ts as *const u8, len);
+    let mut ts_idx=0;
+    for buffer in buffers {
+        buffer.copy_from_slice(&ts_byte_arr[ts_idx..ts_idx+buffer.len()]);
+        ts_idx += buffer.len();
+    }
+    0
 }
 
 /// YOUR JOB: Implement mmap.
@@ -119,6 +152,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
         "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
+    if 
     -1
 }
 
