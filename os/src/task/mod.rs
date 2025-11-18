@@ -21,7 +21,10 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::loader::get_app_data_by_name;
+
+use crate::{loader::get_app_data_by_name, 
+    mm::{MapPermission, VirtPageNum, VirtAddr},
+};
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
@@ -114,4 +117,41 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+/// 为当前任务映射一段虚拟地址空间
+pub fn map_for_current_task(start_vpn:VirtPageNum,num_pages:usize, map_perm:MapPermission) -> isize {
+    let current_task = current_task().unwrap();
+    let memory_set = &mut current_task.inner_exclusive_access().memory_set;
+    let mut end_vpn = start_vpn;
+    for _ in 0..num_pages {
+        if let Some(pte) = memory_set.translate(end_vpn){
+            if !pte.is_valid() {
+                return -1;
+            }
+        }
+        end_vpn.0 += 1;
+    }
+    let start_va = VirtAddr::from(start_vpn);
+    let end_va = VirtAddr::from(end_vpn);
+    memory_set.insert_framed_area(start_va, end_va, map_perm);
+    0
+}
+
+/// 取消当前任务的一段虚拟地址空间映射
+pub fn unmap_for_current_task(start_vpn:VirtPageNum,num_pages:usize) -> isize {
+    let current_task = current_task().unwrap();
+    let memory_set = &mut current_task.inner_exclusive_access().memory_set;
+    let mut end_vpn = start_vpn;
+    for _ in 0..num_pages {
+        if let Some(pte) = memory_set.translate(end_vpn){
+            if !pte.is_valid() {
+                return -1;
+            }
+        }
+        memory_set.unmap_from_page_table(end_vpn);
+        end_vpn.0 += 1;
+    }
+    //memory_set.remove_area_with_start_vpn(start_vpn);
+    0
 }

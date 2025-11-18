@@ -44,6 +44,10 @@ impl MemorySet {
             areas: Vec::new(),
         }
     }
+    ///
+    pub fn unmap_from_page_table(&mut self, vpn: VirtPageNum) {
+        self.page_table.unmap(vpn);
+    }
     /// Get the page table token
     pub fn token(&self) -> usize {
         self.page_table.token()

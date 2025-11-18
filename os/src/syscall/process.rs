@@ -1,14 +1,11 @@
 //! Process management syscalls
 use alloc::sync::Arc;
+//use riscv::addr::VirtAddr;
 
 use crate::{
-    loader::get_app_data_by_name,
-    mm::{translated_byte_buffer, translated_refmut, translated_str},
-    task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next,map_for_current_task,
-    },
-    timer::get_time_us
+    config::PAGE_SIZE, loader::get_app_data_by_name, mm::{MapPermission,VirtAddr, translated_byte_buffer, translated_refmut, translated_str}, task::{
+        add_task, current_task, current_user_token, exit_current_and_run_next, map_for_current_task, suspend_current_and_run_next, unmap_for_current_task
+    }, timer::get_time_us,
 };
 
 #[repr(C)]
@@ -147,22 +144,50 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 }
 
 /// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    if 
-    -1
+    if start % PAGE_SIZE != 0{
+        return -1;
+    }
+    if (port&!0x7 != 0) || (port&0x7 ==0) {
+        return -1;
+    }
+    let num_pages = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+    let mut map_perm: MapPermission = MapPermission::U;
+    if port & 0x1 != 0 {
+        map_perm |= MapPermission::R;
+    } 
+    if port & 0x2 != 0 {
+        map_perm |= MapPermission::W;
+    }
+    if port & 0x4 != 0 {
+        map_perm |= MapPermission::X;
+    }
+    let vpn = VirtAddr::from(start).floor();
+    match map_for_current_task(vpn, num_pages, map_perm){
+        0 => return 0,
+        _ => return -1,
+    }
 }
 
 /// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if start % PAGE_SIZE != 0{
+        return -1;
+    }
+    let num_pages = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+    let vpn = VirtAddr::from(start).floor();
+    match unmap_for_current_task(vpn, num_pages) {
+        0 => return 0,
+        _ => return -1,
+    }
 }
 
 /// change data segment size
