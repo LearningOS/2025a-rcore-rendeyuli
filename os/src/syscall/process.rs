@@ -202,19 +202,45 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+// syscall ID: 400
+//功能：新建子进程，使其执行目标程序。
+//说明：成功返回子进程id，否则返回 -1。
+//可能的错误：
+//无效的文件名。
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(data) = get_app_data_by_name(&path){
+        let current_task = current_task().unwrap();
+        let new_task = current_task.spawn(data);
+        let new_pid = new_task.pid.0;
+        add_task(new_task);
+        new_pid as isize
+    } else{
+        -1
+    }
 }
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+// syscall ID：140
+// 设置当前进程优先级为 prio
+// 参数：prio 进程优先级，要求 prio >= 2
+// 返回值：如果输入合法则返回 prio，否则返回 -1
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let cur_task = current_task().unwrap();
+    let mut inner = cur_task.inner_exclusive_access();
+    if prio >=2 {
+        inner.set_priority(prio);
+        prio
+    } else {
+        -1
+    }
 }

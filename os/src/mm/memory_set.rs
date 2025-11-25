@@ -117,7 +117,7 @@ impl MemorySet {
             ),
             None,
         );
-        info!("mapping .rodata section");
+        info!("mapping .rodata section"); //只读数据段
         memory_set.push(
             MapArea::new(
                 (srodata as usize).into(),

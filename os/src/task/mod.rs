@@ -126,7 +126,8 @@ pub fn map_for_current_task(start_vpn:VirtPageNum,num_pages:usize, map_perm:MapP
     let mut end_vpn = start_vpn;
     for _ in 0..num_pages {
         if let Some(pte) = memory_set.translate(end_vpn){
-            if !pte.is_valid() {
+            //这里我犯了一个错误，pte如果是valid的话，说明以及被映射过了，所以不应该再map,要映射的是invalid的pte
+            if pte.is_valid() {
                 return -1;
             }
         }

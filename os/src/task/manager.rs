@@ -22,8 +22,25 @@ impl TaskManager {
         self.ready_queue.push_back(task);
     }
     /// Take a process out of the ready queue
+    //这里为了实现stride算法，需要进行一定的魔改,采用暴力搜索找到stride最小的进程
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        //self.ready_queue.pop_front()
+        let mut min_stride: usize = 0xffffffff;
+        let mut min_index: usize = 0;
+        for i in 0..self.ready_queue.len() {
+            if let Some(task) = self.ready_queue.get(i){
+                let inner = task.inner_exclusive_access();
+                if inner.stride < min_stride {
+                    min_stride = inner.stride;
+                    min_index = i;
+                }
+            }
+        }
+        if min_index > self.ready_queue.len() {
+            None
+        }else{
+            Some(self.ready_queue.remove(min_index).unwrap())
+        }
     }
 }
 

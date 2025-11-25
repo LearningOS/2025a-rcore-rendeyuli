@@ -26,11 +26,11 @@ impl TrapContext {
     }
     /// init the trap context of an application
     pub fn app_init_context(
-        entry: usize,
-        sp: usize,
-        kernel_satp: usize,
-        kernel_sp: usize,
-        trap_handler: usize,
+        entry: usize, //应用程序的入口地址
+        sp: usize, //用户栈指针
+        kernel_satp: usize, //内核页表Token
+        kernel_sp: usize, //内核栈指针
+        trap_handler: usize, //陷阱处理函数地址
     ) -> Self {
         let mut sstatus = sstatus::read();
         // set CPU privilege to User after trapping back

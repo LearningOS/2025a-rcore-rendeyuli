@@ -4,7 +4,7 @@ use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
-use crate::trap::{trap_handler, TrapContext};
+use crate::trap::{TrapContext, trap_handler};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
@@ -68,9 +68,19 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// priority of the task
+    pub priority: isize,
+
+    pub stride: usize,
 }
 
 impl TaskControlBlockInner {
+    /// set priority of the task
+    pub fn set_priority(&mut self, prio: isize) {
+        self.priority = prio;
+    }
+
     /// get the trap context
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
@@ -118,13 +128,15 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    priority: 16,
+                    stride: 0,
                 })
             },
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
         *trap_cx = TrapContext::app_init_context(
-            entry_point,
+            entry_point, 
             user_sp,
             KERNEL_SPACE.exclusive_access().token(),
             kernel_stack_top,
@@ -191,6 +203,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    priority: parent_inner.priority,
+                    stride: parent_inner.stride,
                 })
             },
         });
@@ -204,6 +218,57 @@ impl TaskControlBlock {
         task_control_block
         // **** release child PCB
         // ---- release parent PCB
+    }
+
+    /// 创建并执行一个新进程
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+            .unwrap()
+            .ppn();
+        let pid_handle = pid_alloc();
+        let kernel_stack = kstack_alloc();
+        let kernel_stack_top = kernel_stack.get_top();
+        let task_control_block = Arc::new(TaskControlBlock{
+            pid : pid_handle,
+            kernel_stack,
+            inner: unsafe {
+                UPSafeCell::new(TaskControlBlockInner { 
+                    trap_cx_ppn, 
+                    base_size: user_sp, 
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),  //保存任务切换所需的寄存器状态
+                    task_status: TaskStatus::Ready, 
+                    memory_set,  //包含该进程所有的内存段以及页表信息
+                    parent: None, //父进程
+                    children: Vec::new(),  //子进程列表
+                    exit_code: 0, 
+                    heap_bottom: user_sp,  //用户堆的起始位置
+                    program_brk: user_sp,  //程序断点位置
+                    priority: 16,
+                    stride: 0,
+                })
+            }
+
+        });
+        //初始化trap_cx
+        let inner = task_control_block.inner_exclusive_access();
+        let trap_cx = inner.get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point, 
+            user_sp, 
+            KERNEL_SPACE.exclusive_access().token(), 
+            kernel_stack_top, 
+            trap_handler as usize
+        );
+        //注意前面由于borrow了task_control_block，所以这里要释放
+        drop(inner);
+        // 添加子进程的引用
+        let mut parent_inner = self.inner_exclusive_access();
+        parent_inner.children.push(task_control_block.clone());
+
+        task_control_block
+
     }
 
     /// get pid of process
